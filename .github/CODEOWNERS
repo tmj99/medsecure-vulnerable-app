@@ -1,0 +1,13 @@
+# Security team owns config
+src/main/java/com/medsecure/app/config/    @security-team-lead
+
+# Backend team owns controllers and services
+src/main/java/com/medsecure/app/controller/ @backend-lead
+src/main/java/com/medsecure/app/service/    @backend-lead
+
+# Data team owns repository/model
+src/main/java/com/medsecure/app/repository/ @data-lead
+src/main/java/com/medsecure/app/model/      @data-lead
+
+# DevOps owns CI/CD
+.github/                                    @devops-lead
