@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.RestController;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 @RestController
 @RequestMapping("/api/files")
@@ -21,14 +23,26 @@ public class FileController {
     private static final String REPORTS_BASE_DIR = "/opt/medsecure/reports/";
 
     /**
-     * VULNERABILITY: Path Traversal
-     * The 'filename' parameter is appended directly to the base directory path
-     * without sanitization. An attacker can use "../" sequences to read arbitrary
-     * files on the server filesystem.
+     * Downloads a report file with path traversal protection.
+     * Only allows access to files within the reports directory.
      */
     @GetMapping("/download")
     public ResponseEntity<Resource> downloadReport(@RequestParam String filename) throws IOException {
-        File file = new File(REPORTS_BASE_DIR + filename);
+        // Security fix: Sanitize filename and prevent path traversal
+        String sanitizedFilename = sanitizeFilename(filename);
+        if (sanitizedFilename == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        
+        Path basePath = Paths.get(REPORTS_BASE_DIR).toAbsolutePath().normalize();
+        Path requestedPath = basePath.resolve(sanitizedFilename).normalize();
+        
+        // Ensure the resolved path is still within the base directory
+        if (!requestedPath.startsWith(basePath)) {
+            return ResponseEntity.badRequest().build();
+        }
+        
+        File file = requestedPath.toFile();
 
         if (!file.exists()) {
             return ResponseEntity.notFound().build();
@@ -54,5 +68,28 @@ public class FileController {
             return ResponseEntity.ok(new String[]{});
         }
         return ResponseEntity.ok(reportsDir.list());
+    }
+    
+    /**
+     * Sanitizes filename to prevent path traversal attacks.
+     * Removes dangerous characters and path separators.
+     */
+    private String sanitizeFilename(String filename) {
+        if (filename == null || filename.trim().isEmpty()) {
+            return null;
+        }
+        
+        // Remove any path traversal sequences and directory separators
+        String sanitized = filename.replaceAll("\\.\\.", "")
+                                 .replaceAll("[\\\\/]", "")
+                                 .replaceAll("[\\x00-\\x1F\\x7F]", "")
+                                 .trim();
+        
+        // Reject if empty after sanitization or contains only dots
+        if (sanitized.isEmpty() || sanitized.matches("^\\.+$")) {
+            return null;
+        }
+        
+        return sanitized;
     }
 }
