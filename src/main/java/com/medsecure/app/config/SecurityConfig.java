@@ -53,7 +53,10 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-            .csrf(csrf -> csrf.disable())
+            // Fixed: Enable CSRF protection for non-API endpoints while allowing exemptions for specific endpoints
+            .csrf(csrf -> csrf
+                .ignoringRequestMatchers("/h2-console/**") // H2 console needs CSRF disabled
+            )
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/patients/**").hasAnyRole("ADMIN", "DOCTOR")
                 .requestMatchers("/api/files/**").hasRole("ADMIN")
