@@ -13,12 +13,16 @@ import org.springframework.web.bind.annotation.RestController;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 @RestController
 @RequestMapping("/api/files")
 public class FileController {
 
     private static final String REPORTS_BASE_DIR = "/opt/medsecure/reports/";
+    // Security: Base path for validation to prevent path traversal attacks
+    private static final Path BASE_PATH = Paths.get(REPORTS_BASE_DIR).normalize().toAbsolutePath();
 
     /**
      * VULNERABILITY: Path Traversal
@@ -28,13 +32,24 @@ public class FileController {
      */
     @GetMapping("/download")
     public ResponseEntity<Resource> downloadReport(@RequestParam String filename) throws IOException {
-        File file = new File(REPORTS_BASE_DIR + filename);
+        // Security: Sanitize filename and validate path to prevent directory traversal
+        if (filename == null || filename.isEmpty() || filename.contains("..") || filename.contains("/") || filename.contains("\\")) {
+            return ResponseEntity.badRequest().build();
+        }
+        
+        Path filePath = BASE_PATH.resolve(filename).normalize();
+        // Security: Ensure resolved path is still within base directory
+        if (!filePath.startsWith(BASE_PATH)) {
+            return ResponseEntity.badRequest().build();
+        }
+        
+        File file = filePath.toFile();
 
         if (!file.exists()) {
             return ResponseEntity.notFound().build();
         }
 
-        String contentType = Files.probeContentType(file.toPath());
+        String contentType = Files.probeContentType(filePath);
         if (contentType == null) {
             contentType = "application/octet-stream";
         }
@@ -55,4 +70,5 @@ public class FileController {
         }
         return ResponseEntity.ok(reportsDir.list());
     }
+
 }
