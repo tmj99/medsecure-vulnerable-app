@@ -11,6 +11,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 
 @Configuration
 @EnableWebSecurity
@@ -53,7 +54,11 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-            .csrf(csrf -> csrf.disable())
+            // Fixed: Re-enable CSRF protection with cookie-based token repository for healthcare data security
+            .csrf(csrf -> csrf
+                .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                .ignoringRequestMatchers("/h2-console/**") // Only disable for H2 console
+            )
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/patients/**").hasAnyRole("ADMIN", "DOCTOR")
                 .requestMatchers("/api/files/**").hasRole("ADMIN")
