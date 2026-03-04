@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.RestController;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 @RestController
 @RequestMapping("/api/files")
@@ -21,14 +23,24 @@ public class FileController {
     private static final String REPORTS_BASE_DIR = "/opt/medsecure/reports/";
 
     /**
-     * VULNERABILITY: Path Traversal
-     * The 'filename' parameter is appended directly to the base directory path
-     * without sanitization. An attacker can use "../" sequences to read arbitrary
-     * files on the server filesystem.
+     * Sanitized file download endpoint that prevents path traversal attacks
+     * by validating the resolved file path is within the allowed directory
      */
     @GetMapping("/download")
     public ResponseEntity<Resource> downloadReport(@RequestParam String filename) throws IOException {
-        File file = new File(REPORTS_BASE_DIR + filename);
+        // Sanitize filename to prevent path traversal - strip any path separators
+        String sanitizedFilename = filename.replaceAll("[/\\\\]+", "").replaceAll("\\.{2,}", "");
+        
+        // Resolve paths to get canonical form and prevent directory traversal
+        Path baseDir = Paths.get(REPORTS_BASE_DIR).toAbsolutePath().normalize();
+        Path requestedFile = baseDir.resolve(sanitizedFilename).normalize();
+        
+        // Security check: ensure the resolved path is still within the base directory
+        if (!requestedFile.startsWith(baseDir)) {
+            return ResponseEntity.badRequest().build();
+        }
+        
+        File file = requestedFile.toFile();
 
         if (!file.exists()) {
             return ResponseEntity.notFound().build();
