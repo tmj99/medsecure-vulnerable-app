@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.RestController;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 @RestController
 @RequestMapping("/api/files")
@@ -21,20 +23,30 @@ public class FileController {
     private static final String REPORTS_BASE_DIR = "/opt/medsecure/reports/";
 
     /**
-     * VULNERABILITY: Path Traversal
-     * The 'filename' parameter is appended directly to the base directory path
-     * without sanitization. An attacker can use "../" sequences to read arbitrary
-     * files on the server filesystem.
+     * Downloads a report file from the reports directory.
+     * The filename is sanitized to prevent path traversal attacks.
      */
     @GetMapping("/download")
     public ResponseEntity<Resource> downloadReport(@RequestParam String filename) throws IOException {
-        File file = new File(REPORTS_BASE_DIR + filename);
+        // Sanitize filename to prevent path traversal - remove path separators and traversal sequences
+        String sanitizedFilename = filename.replaceAll("[/\\\\]", "").replaceAll("\\.\\.", "");
+        
+        // Resolve the file path securely using Path API
+        Path basePath = Paths.get(REPORTS_BASE_DIR).normalize();
+        Path filePath = basePath.resolve(sanitizedFilename).normalize();
+        
+        // Verify the resolved path is still within the base directory to prevent path traversal
+        if (!filePath.startsWith(basePath)) {
+            return ResponseEntity.badRequest().build();
+        }
+        
+        File file = filePath.toFile();
 
         if (!file.exists()) {
             return ResponseEntity.notFound().build();
         }
 
-        String contentType = Files.probeContentType(file.toPath());
+        String contentType = Files.probeContentType(filePath);
         if (contentType == null) {
             contentType = "application/octet-stream";
         }
@@ -55,4 +67,5 @@ public class FileController {
         }
         return ResponseEntity.ok(reportsDir.list());
     }
+
 }
