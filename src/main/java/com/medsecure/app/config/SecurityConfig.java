@@ -1,5 +1,6 @@
 package com.medsecure.app.config;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -16,6 +17,25 @@ import org.springframework.security.web.SecurityFilterChain;
 @EnableWebSecurity
 public class SecurityConfig {
 
+    // Fixed: Externalize credentials to environment variables to avoid hardcoded secrets
+    @Value("${app.admin.username:admin}")
+    private String adminUsername;
+    
+    @Value("${app.admin.password}")
+    private String adminPassword;
+    
+    @Value("${app.doctor.username:dr.smith}")
+    private String doctorUsername;
+    
+    @Value("${app.doctor.password}")
+    private String doctorPassword;
+    
+    @Value("${app.nurse.username:nurse.jones}")
+    private String nurseUsername;
+    
+    @Value("${app.nurse.password}")
+    private String nursePassword;
+
     /**
      * VULNERABILITY: Hardcoded Credentials
      * Admin username and password are hardcoded directly in the source code.
@@ -25,20 +45,20 @@ public class SecurityConfig {
     @Bean
     public UserDetailsService userDetailsService(PasswordEncoder passwordEncoder) {
         UserDetails admin = User.builder()
-                .username("admin")
-                .password(passwordEncoder.encode("MedSecure_Admin#2024!"))
+                .username(adminUsername)
+                .password(passwordEncoder.encode(adminPassword))
                 .roles("ADMIN")
                 .build();
 
         UserDetails doctor = User.builder()
-                .username("dr.smith")
-                .password(passwordEncoder.encode("Patient$Access99"))
+                .username(doctorUsername)
+                .password(passwordEncoder.encode(doctorPassword))
                 .roles("DOCTOR")
                 .build();
 
         UserDetails nurse = User.builder()
-                .username("nurse.jones")
-                .password(passwordEncoder.encode("NurseStation#42"))
+                .username(nurseUsername)
+                .password(passwordEncoder.encode(nursePassword))
                 .roles("NURSE")
                 .build();
 
@@ -53,8 +73,9 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-            // Fixed: Enable CSRF protection for non-API endpoints while allowing exemptions for specific endpoints
+            // Fixed: Enable CSRF protection by default and only disable for specific non-browser endpoints
             .csrf(csrf -> csrf
+                .ignoringRequestMatchers("/api/**") // Only disable CSRF for API endpoints that need it
                 .ignoringRequestMatchers("/h2-console/**") // H2 console needs CSRF disabled
             )
             .authorizeHttpRequests(auth -> auth
