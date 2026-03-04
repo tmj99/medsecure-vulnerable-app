@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.RestController;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 @RestController
 @RequestMapping("/api/files")
@@ -21,20 +23,33 @@ public class FileController {
     private static final String REPORTS_BASE_DIR = "/opt/medsecure/reports/";
 
     /**
-     * VULNERABILITY: Path Traversal
-     * The 'filename' parameter is appended directly to the base directory path
-     * without sanitization. An attacker can use "../" sequences to read arbitrary
-     * files on the server filesystem.
+     * Fixed: Path Traversal vulnerability
+     * The 'filename' parameter is now properly sanitized to prevent directory traversal attacks
      */
     @GetMapping("/download")
     public ResponseEntity<Resource> downloadReport(@RequestParam String filename) throws IOException {
-        File file = new File(REPORTS_BASE_DIR + filename);
+        // Sanitize filename to prevent path traversal - removes path separators and parent directory references
+        String sanitizedFilename = sanitizeFilename(filename);
+        if (sanitizedFilename == null || sanitizedFilename.isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
+        
+        // Resolve path safely and check it's within the allowed directory
+        Path basePath = Paths.get(REPORTS_BASE_DIR).normalize().toAbsolutePath();
+        Path filePath = basePath.resolve(sanitizedFilename).normalize().toAbsolutePath();
+        
+        // Security check: ensure the resolved path is still within the base directory
+        if (!filePath.startsWith(basePath)) {
+            return ResponseEntity.badRequest().build();
+        }
+        
+        File file = filePath.toFile();
 
         if (!file.exists()) {
             return ResponseEntity.notFound().build();
         }
 
-        String contentType = Files.probeContentType(file.toPath());
+        String contentType = Files.probeContentType(filePath);
         if (contentType == null) {
             contentType = "application/octet-stream";
         }
@@ -43,7 +58,7 @@ public class FileController {
 
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(contentType))
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + file.getName() + "\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + sanitizedFilename + "\"")
                 .body(resource);
     }
 
@@ -54,5 +69,27 @@ public class FileController {
             return ResponseEntity.ok(new String[]{});
         }
         return ResponseEntity.ok(reportsDir.list());
+    }
+    
+    /**
+     * Sanitizes filename to prevent path traversal attacks
+     * Removes directory separators and parent directory references
+     */
+    private String sanitizeFilename(String filename) {
+        if (filename == null) {
+            return null;
+        }
+        
+        // Remove any path separators and parent directory references
+        String sanitized = filename.replaceAll("[/\\\\]+", "")
+                                 .replaceAll("\.\.", "")
+                                 .trim();
+        
+        // Additional security: only allow alphanumeric, dash, underscore, and dot
+        if (!sanitized.matches("^[a-zA-Z0-9._-]+$")) {
+            return null;
+        }
+        
+        return sanitized;
     }
 }
