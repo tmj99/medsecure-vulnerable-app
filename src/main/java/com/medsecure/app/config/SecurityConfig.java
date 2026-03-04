@@ -53,7 +53,11 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-            .csrf(csrf -> csrf.disable())
+            // SECURITY FIX: Enable CSRF protection for healthcare data security
+            // Only disable for H2 console in dev environment to allow iframe access
+            .csrf(csrf -> csrf
+                .ignoringRequestMatchers("/h2-console/**")
+            )
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/patients/**").hasAnyRole("ADMIN", "DOCTOR")
                 .requestMatchers("/api/files/**").hasRole("ADMIN")
