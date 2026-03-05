@@ -73,9 +73,9 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-            // Fixed: Enable CSRF protection by default with selective disabling for specific API endpoints
+            // Fixed: Enable CSRF protection by default, only disable for specific stateless endpoints
             .csrf(csrf -> csrf
-                .ignoringRequestMatchers("/api/public/**") // Only disable CSRF for stateless public APIs that don't use cookies
+                .ignoringRequestMatchers("/api/public/**") // Only disable CSRF for stateless public APIs
                 .ignoringRequestMatchers("/h2-console/**") // H2 console needs CSRF disabled for development
             )
             .authorizeHttpRequests(auth -> auth
