@@ -44,15 +44,16 @@ public class PatientController {
     }
 
     /**
-     * VULNERABILITY: SQL Injection
-     * User-supplied 'name' parameter is concatenated directly into a native SQL query
-     * without parameterization, allowing an attacker to inject arbitrary SQL.
+     * Fixed SQL injection vulnerability by using parameterized query.
+     * User input is now safely bound to query parameters instead of string concatenation.
      */
     @SuppressWarnings("unchecked")
     @GetMapping("/search")
     public ResponseEntity<List<Patient>> searchPatients(@RequestParam String name) {
-        String sql = "SELECT * FROM patients WHERE first_name LIKE '%" + name + "%' OR last_name LIKE '%" + name + "%'";
+        // Fixed: Use parameterized query to prevent SQL injection
+        String sql = "SELECT * FROM patients WHERE first_name LIKE :namePattern OR last_name LIKE :namePattern";
         Query query = entityManager.createNativeQuery(sql, Patient.class);
+        query.setParameter("namePattern", "%" + name + "%");
         List<Patient> results = query.getResultList();
         return ResponseEntity.ok(results);
     }
