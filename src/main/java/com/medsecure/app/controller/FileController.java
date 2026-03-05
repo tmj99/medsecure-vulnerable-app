@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.RestController;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 @RestController
 @RequestMapping("/api/files")
@@ -28,7 +30,22 @@ public class FileController {
      */
     @GetMapping("/download")
     public ResponseEntity<Resource> downloadReport(@RequestParam String filename) throws IOException {
-        File file = new File(REPORTS_BASE_DIR + filename);
+        // SECURITY FIX: Validate filename to prevent path traversal attacks
+        if (filename == null || filename.isEmpty() || 
+            filename.contains("..") || filename.contains("/") || filename.contains("\\")) {
+            return ResponseEntity.badRequest().build();
+        }
+        
+        // SECURITY FIX: Use Paths.resolve() and normalize() to safely construct path
+        Path basePath = Paths.get(REPORTS_BASE_DIR).normalize();
+        Path filePath = basePath.resolve(filename).normalize();
+        
+        // SECURITY FIX: Ensure resolved path is still within base directory
+        if (!filePath.startsWith(basePath)) {
+            return ResponseEntity.badRequest().build();
+        }
+        
+        File file = filePath.toFile();
 
         if (!file.exists()) {
             return ResponseEntity.notFound().build();
