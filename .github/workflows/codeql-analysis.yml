@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  schedule:
+    # Weekly safety-net scan: re-evaluates the default branch even if a
+    # push-triggered run was skipped or failed (e.g. Maven build error,
+    # workflow quota exceeded).  Runs every Monday at 06:00 UTC.
+    - cron: "0 6 * * 1"
 
 jobs:
   analyze:
@@ -29,6 +34,7 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: 'maven'
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
@@ -36,9 +42,11 @@ jobs:
           languages: ${{ matrix.language }}
 
       - name: Build with Maven
-        run: mvn compile -B -q
+        run: mvn compile -B
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
         with:
           category: "/language:${{ matrix.language }}"
+          ref: ${{ github.ref }}
+          sha: ${{ github.sha }}
