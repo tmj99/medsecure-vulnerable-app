@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.util.HtmlUtils;
 
 import java.util.List;
 
@@ -83,15 +84,16 @@ public class PatientController {
     public ResponseEntity<String> searchPatientsPage(@RequestParam(required = false) String query) {
         String html = "<html><body><h1>Patient Search</h1>"
                 + "<form action='/api/patients/search-page' method='get'>"
-                + "<input name='query' value='" + (query != null ? query : "") + "'/>"
+                + "<input name='query' value='" + HtmlUtils.htmlEscape(query != null ? query : "") + "'/>"
                 + "<button type='submit'>Search</button>"
                 + "</form>";
 
         if (query != null && !query.isEmpty()) {
-            html += "<p>Search results for: " + query + "</p>";
+            html += "<p>Search results for: " + HtmlUtils.htmlEscape(query) + "</p>"; // Fixed XSS: HTML-encoded user input before embedding in HTML
         }
 
         html += "</body></html>";
         return ResponseEntity.ok(html);
     }
 }
+
