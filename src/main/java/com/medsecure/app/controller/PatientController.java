@@ -51,8 +51,12 @@ public class PatientController {
     @SuppressWarnings("unchecked")
     @GetMapping("/search")
     public ResponseEntity<List<Patient>> searchPatients(@RequestParam String name) {
-        String sql = "SELECT * FROM patients WHERE first_name LIKE '%" + name + "%' OR last_name LIKE '%" + name + "%'";
+        // Fixed: Use parameterized query instead of string concatenation to prevent SQL injection
+        String sql = "SELECT * FROM patients WHERE first_name LIKE :name1 OR last_name LIKE :name2";
         Query query = entityManager.createNativeQuery(sql, Patient.class);
+        String searchPattern = "%" + name + "%";
+        query.setParameter("name1", searchPattern);
+        query.setParameter("name2", searchPattern);
         List<Patient> results = query.getResultList();
         return ResponseEntity.ok(results);
     }
