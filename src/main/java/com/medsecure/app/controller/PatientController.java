@@ -18,6 +18,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+import org.springframework.http.MediaType;
+
 @RestController
 @RequestMapping("/api/patients")
 public class PatientController {
@@ -66,5 +68,30 @@ public class PatientController {
     @GetMapping("/by-diagnosis")
     public ResponseEntity<List<Patient>> getByDiagnosis(@RequestParam String diagnosis) {
         return ResponseEntity.ok(patientService.getPatientsByDiagnosis(diagnosis));
+    }
+
+    /**
+     * VULNERABILITY: Cross-Site Scripting (XSS)
+     * The 'query' parameter from user input is embedded directly into an HTML
+     * response without any output encoding or sanitization. An attacker can
+     * inject malicious JavaScript (e.g., <script>alert('xss')</script>) that
+     * will execute in the victim's browser.
+     * Fix: HTML-encode all user-supplied data before including it in HTML output,
+     * or use a templating engine that auto-escapes by default.
+     */
+    @GetMapping(value = "/search-page", produces = MediaType.TEXT_HTML_VALUE)
+    public ResponseEntity<String> searchPatientsPage(@RequestParam(required = false) String query) {
+        String html = "<html><body><h1>Patient Search</h1>"
+                + "<form action='/api/patients/search-page' method='get'>"
+                + "<input name='query' value='" + (query != null ? query : "") + "'/>"
+                + "<button type='submit'>Search</button>"
+                + "</form>";
+
+        if (query != null && !query.isEmpty()) {
+            html += "<p>Search results for: " + query + "</p>";
+        }
+
+        html += "</body></html>";
+        return ResponseEntity.ok(html);
     }
 }
