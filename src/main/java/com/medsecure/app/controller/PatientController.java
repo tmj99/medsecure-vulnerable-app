@@ -52,11 +52,11 @@ public class PatientController {
     @SuppressWarnings("unchecked")
     @GetMapping("/search")
     public ResponseEntity<List<Patient>> searchPatients(@RequestParam String name) {
-        // Use parameterized query with named parameter to prevent SQL injection
-        String sql = "SELECT * FROM patients WHERE first_name LIKE :namePattern OR last_name LIKE :namePattern";
+        // Use SQL CONCAT function to handle wildcards without string concatenation in Java code
+        String sql = "SELECT * FROM patients WHERE first_name LIKE CONCAT('%', :namePattern, '%') OR last_name LIKE CONCAT('%', :namePattern, '%')";
         Query query = entityManager.createNativeQuery(sql, Patient.class);
-        String namePattern = "%" + name + "%";
-        query.setParameter("namePattern", namePattern);
+        // Pass user input directly to parameter without string concatenation
+        query.setParameter("namePattern", name);
         List<Patient> results = query.getResultList();
         return ResponseEntity.ok(results);
     }
