@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.RestController;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 @RestController
 @RequestMapping("/api/files")
@@ -28,7 +30,22 @@ public class FileController {
      */
     @GetMapping("/download")
     public ResponseEntity<Resource> downloadReport(@RequestParam String filename) throws IOException {
-        File file = new File(REPORTS_BASE_DIR + filename);
+        // Security fix: Sanitize filename to prevent path traversal attacks
+        String sanitizedFilename = sanitizeFilename(filename);
+        if (sanitizedFilename == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        
+        // Security fix: Use Path.resolve() and normalize() to prevent directory traversal
+        Path basePath = Paths.get(REPORTS_BASE_DIR).normalize();
+        Path filePath = basePath.resolve(sanitizedFilename).normalize();
+        
+        // Security fix: Verify the resolved path is still within the base directory
+        if (!filePath.startsWith(basePath)) {
+            return ResponseEntity.badRequest().build();
+        }
+        
+        File file = filePath.toFile();
 
         if (!file.exists()) {
             return ResponseEntity.notFound().build();
@@ -45,6 +62,29 @@ public class FileController {
                 .contentType(MediaType.parseMediaType(contentType))
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + file.getName() + "\"")
                 .body(resource);
+    }
+    
+    /**
+     * Security utility method to sanitize filenames and prevent path traversal
+     * @param filename The input filename
+     * @return Sanitized filename or null if invalid
+     */
+    private String sanitizeFilename(String filename) {
+        if (filename == null || filename.trim().isEmpty()) {
+            return null;
+        }
+        
+        // Remove any path traversal sequences and invalid characters
+        String sanitized = filename.replaceAll("[/\\\\:*?\"<>|]", "")
+                                 .replaceAll("\.\.", "")
+                                 .trim();
+        
+        // Ensure we still have a valid filename after sanitization
+        if (sanitized.isEmpty() || sanitized.equals(".") || sanitized.equals("..")) {
+            return null;
+        }
+        
+        return sanitized;
     }
 
     @GetMapping("/list")
