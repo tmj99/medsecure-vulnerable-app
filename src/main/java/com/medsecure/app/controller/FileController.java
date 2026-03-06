@@ -13,28 +13,41 @@ import org.springframework.web.bind.annotation.RestController;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 @RestController
 @RequestMapping("/api/files")
 public class FileController {
 
     private static final String REPORTS_BASE_DIR = "/opt/medsecure/reports/";
+    private static final Path REPORTS_BASE_PATH = Paths.get(REPORTS_BASE_DIR).toAbsolutePath().normalize();
 
     /**
-     * VULNERABILITY: Path Traversal
-     * The 'filename' parameter is appended directly to the base directory path
-     * without sanitization. An attacker can use "../" sequences to read arbitrary
-     * files on the server filesystem.
+     * VULNERABILITY FIXED: Path Traversal
+     * Added path validation to prevent directory traversal attacks
      */
     @GetMapping("/download")
     public ResponseEntity<Resource> downloadReport(@RequestParam String filename) throws IOException {
-        File file = new File(REPORTS_BASE_DIR + filename);
+        // Sanitize filename to prevent path traversal - only allow basic filename characters
+        if (filename == null || filename.isEmpty() || 
+            filename.contains("..") || filename.contains("/") || filename.contains("\\")) {
+            return ResponseEntity.badRequest().build();
+        }
+        
+        // Resolve the file path and validate it stays within the base directory
+        Path requestedPath = REPORTS_BASE_PATH.resolve(filename).normalize();
+        if (!requestedPath.startsWith(REPORTS_BASE_PATH)) {
+            return ResponseEntity.badRequest().build();
+        }
+        
+        File file = requestedPath.toFile();
 
         if (!file.exists()) {
             return ResponseEntity.notFound().build();
         }
 
-        String contentType = Files.probeContentType(file.toPath());
+        String contentType = Files.probeContentType(requestedPath);
         if (contentType == null) {
             contentType = "application/octet-stream";
         }
@@ -55,4 +68,5 @@ public class FileController {
         }
         return ResponseEntity.ok(reportsDir.list());
     }
+
 }
