@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.RestController;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 @RestController
 @RequestMapping("/api/files")
@@ -28,7 +30,21 @@ public class FileController {
      */
     @GetMapping("/download")
     public ResponseEntity<Resource> downloadReport(@RequestParam String filename) throws IOException {
-        File file = new File(REPORTS_BASE_DIR + filename);
+        // SECURITY FIX: Sanitize filename to prevent path traversal attacks
+        String sanitizedFilename = sanitizeFilename(filename);
+        if (sanitizedFilename == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        
+        Path basePath = Paths.get(REPORTS_BASE_DIR).normalize().toAbsolutePath();
+        Path filePath = basePath.resolve(sanitizedFilename).normalize().toAbsolutePath();
+        
+        // SECURITY FIX: Ensure the resolved path is still within the base directory
+        if (!filePath.startsWith(basePath)) {
+            return ResponseEntity.badRequest().build();
+        }
+        
+        File file = filePath.toFile();
 
         if (!file.exists()) {
             return ResponseEntity.notFound().build();
@@ -45,6 +61,26 @@ public class FileController {
                 .contentType(MediaType.parseMediaType(contentType))
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + file.getName() + "\"")
                 .body(resource);
+    }
+    
+    /**
+     * SECURITY FIX: Helper method to sanitize filename input
+     * Removes path traversal sequences and validates filename
+     */
+    private String sanitizeFilename(String filename) {
+        if (filename == null || filename.trim().isEmpty()) {
+            return null;
+        }
+        
+        // Remove any path separators and traversal sequences
+        String sanitized = filename.replaceAll("[/\\\\]|\\.\\.|\\.~/", "");
+        
+        // Ensure the sanitized filename is not empty and contains only safe characters
+        if (sanitized.trim().isEmpty() || !sanitized.matches("[a-zA-Z0-9._-]+")) {
+            return null;
+        }
+        
+        return sanitized;
     }
 
     @GetMapping("/list")
