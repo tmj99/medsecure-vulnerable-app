@@ -11,25 +11,39 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/lab")
 public class ExternalLabController {
 
+    // Pre-configured trusted lab endpoints mapped by lab ID
+    // Changed from TRUSTED_DOMAINS list to LAB_ENDPOINTS map to eliminate user control over URLs
+    private static final Map<String, String> LAB_ENDPOINTS = Map.of(
+        "labcorp", "https://api.labcorp.com/results",
+        "quest", "https://api.questdiagnostics.com/results",
+        "trusted-lab", "https://api.trustedlabs.example.com/results"
+    );
+
     /**
-     * VULNERABILITY: Server-Side Request Forgery (SSRF)
-     * The 'url' parameter from user input is used directly to open an HTTP
-     * connection from the server. An attacker can supply internal network URLs
-     * (e.g., http://169.254.169.254/latest/meta-data/ for cloud metadata) or
-     * localhost addresses to access internal services not meant to be exposed.
-     * Fix: Validate the URL against an allowlist of trusted external domains
-     * and block private/internal IP ranges.
+     * VULNERABILITY FIXED: Server-Side Request Forgery (SSRF)
+     * Previously the 'url' parameter from user input was used directly to open an HTTP
+     * connection. Now uses lab ID lookup to prevent user control over target URLs.
+     * Fix: Changed to use labId parameter that maps to pre-configured trusted URLs,
+     * eliminating any user influence over the actual URL used for connections.
      */
     @GetMapping("/results")
-    public ResponseEntity<String> fetchLabResults(@RequestParam String url) {
+    // Changed parameter from String url to String labId to eliminate user control over URLs
+    public ResponseEntity<String> fetchLabResults(@RequestParam String labId) {
         try {
-            URL labUrl = new URL(url);
+            // Use ID-based lookup instead of user-provided URL to prevent SSRF
+            String trustedUrl = LAB_ENDPOINTS.get(labId);
+            if (trustedUrl == null) {
+                return ResponseEntity.badRequest().body("Invalid lab ID");
+            }
+            
+            URL labUrl = new URL(trustedUrl);
             HttpURLConnection connection = (HttpURLConnection) labUrl.openConnection();
             connection.setRequestMethod("GET");
             connection.setConnectTimeout(5000);
